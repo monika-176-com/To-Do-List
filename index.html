@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Task Mate - To-Do List</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gradient-to-b from-blue-100 to-purple-100 min-h-screen p-4">
+  <div class="max-w-3xl mx-auto bg-white shadow-2xl rounded-xl p-6">
+    <h1 class="text-4xl font-bold mb-6 text-center text-indigo-700">🎯 Task Mate</h1>
+
+    <!-- Task Form -->
+    <div class="grid md:grid-cols-4 gap-3 mb-4">
+      <input id="title" class="bg-blue-50 border border-blue-200 rounded p-2" type="text" placeholder="Title" />
+      <input id="description" class="bg-blue-50 border border-blue-200 rounded p-2" type="text" placeholder="Description" />
+      <input id="dueDate" class="bg-blue-50 border border-blue-200 rounded p-2" type="date" />
+      <input id="category" class="bg-blue-50 border border-blue-200 rounded p-2" type="text" placeholder="Category" />
+    </div>
+    <button onclick="addTask()" id="taskButton" class="bg-indigo-600 text-white px-4 py-2 rounded hover:bg-indigo-700 transition">Add Task</button>
+
+    <!-- Search and Filter -->
+    <div class="grid md:grid-cols-2 gap-3 my-6">
+      <input id="search" class="bg-yellow-50 border border-yellow-300 rounded p-2" type="text" placeholder="Search tasks..." oninput="renderTasks()" />
+      <input id="filter" class="bg-yellow-50 border border-yellow-300 rounded p-2" type="text" placeholder="Filter by category" oninput="renderTasks()" />
+    </div>
+
+    <!-- Task List -->
+    <div id="taskList" class="grid gap-4"></div>
+  </div>
+
+  <!-- Reminder Sound -->
+  <audio id="reminderSound" src="https://actions.google.com/sounds/v1/alarms/beep_short.ogg" preload="auto"></audio>
+
+  <script>
+    let tasks = JSON.parse(localStorage.getItem('tasks')) || [];
+    let editingTaskId = null;
+    let soundEnabled = false;
+
+    // Enable sound on user interaction
+    document.addEventListener('click', () => {
+      soundEnabled = true;
+    });
+
+    function saveTasks() {
+      localStorage.setItem('tasks', JSON.stringify(tasks));
+    }
+
+    function addTask() {
+      const title = document.getElementById('title').value;
+      const description = document.getElementById('description').value;
+      const dueDate = document.getElementById('dueDate').value;
+      const category = document.getElementById('category').value;
+
+      if (!title || !description) return alert('Please fill in all required fields');
+
+      if (editingTaskId) {
+        const task = tasks.find(t => t.id === editingTaskId);
+        task.title = title;
+        task.description = description;
+        task.dueDate = dueDate;
+        task.category = category;
+        editingTaskId = null;
+        document.getElementById('taskButton').innerText = "Add Task";
+      } else {
+        tasks.push({ id: Date.now(), title, description, dueDate, category, completed: false });
+      }
+
+      saveTasks();
+      clearForm();
+      renderTasks();
+    }
+
+    function clearForm() {
+      ['title', 'description', 'dueDate', 'category'].forEach(id => document.getElementById(id).value = '');
+    }
+
+    function toggleComplete(id) {
+      const task = tasks.find(t => t.id === id);
+      task.completed = !task.completed;
+      saveTasks();
+      renderTasks();
+    }
+
+    function deleteTask(id) {
+      tasks = tasks.filter(t => t.id !== id);
+      saveTasks();
+      renderTasks();
+    }
+
+    function editTask(id) {
+      const task = tasks.find(t => t.id === id);
+      document.getElementById('title').value = task.title;
+      document.getElementById('description').value = task.description;
+      document.getElementById('dueDate').value = task.dueDate;
+      document.getElementById('category').value = task.category;
+      editingTaskId = id;
+      document.getElementById('taskButton').innerText = "Save Changes";
+    }
+
+    function renderTasks() {
+      const list = document.getElementById('taskList');
+      const search = document.getElementById('search').value.toLowerCase();
+      const filter = document.getElementById('filter').value.toLowerCase();
+      list.innerHTML = '';
+
+      const filtered = tasks.filter(t =>
+        (t.title.toLowerCase().includes(search) || t.description.toLowerCase().includes(search)) &&
+        (filter === '' || t.category.toLowerCase().includes(filter))
+      );
+
+      if (filtered.length === 0) {
+        list.innerHTML = '<p class="text-center text-gray-500">No tasks found.</p>';
+        return;
+      }
+
+      filtered.forEach(task => {
+        const taskCard = document.createElement('div');
+        taskCard.className = `p-4 rounded-lg shadow-md transition ${
+          task.completed ? 'bg-emerald-100 border-l-4 border-emerald-500' : 'bg-pink-50 border-l-4 border-indigo-400'
+        }`;
+
+        taskCard.innerHTML = `
+          <h2 class="text-xl font-semibold text-indigo-800">${task.title}</h2>
+          <p class="text-gray-700">${task.description}</p>
+          <p class="text-sm text-gray-600 mt-1">Due: ${task.dueDate || 'No due date'}</p>
+          <p class="text-sm text-gray-600">Category: ${task.category || 'None'}</p>
+          <div class="flex gap-2 mt-3 flex-wrap">
+            <button onclick="toggleComplete(${task.id})" class="bg-emerald-500 text-white px-3 py-1 rounded hover:bg-emerald-600 transition">${task.completed ? 'Mark Incomplete' : 'Mark Completed'}</button>
+            <button onclick="editTask(${task.id})" class="bg-amber-500 text-white px-3 py-1 rounded hover:bg-amber-600 transition">Edit</button>
+            <button onclick="deleteTask(${task.id})" class="bg-rose-500 text-white px-3 py-1 rounded hover:bg-rose-600 transition">Delete</button>
+          </div>
+        `;
+        list.appendChild(taskCard);
+      });
+    }
+
+    function remindUnfinishedTasks() {
+      const now = new Date();
+      const sound = document.getElementById("reminderSound");
+      let reminded = false;
+
+      tasks.forEach(task => {
+        if (!task.completed && (!task.dueDate || new Date(task.dueDate) < now)) {
+          if (!reminded) {
+            alert(`Reminder: You have unfinished tasks!\nExample: "${task.title}"`);
+            if (soundEnabled) sound.play();
+            reminded = true;
+          }
+        }
+      });
+    }
+
+    // ⏰ Trigger reminders every 1 minute
+    setInterval(remindUnfinishedTasks, 60000);
+
+    renderTasks();
+  </script>
+</body>
+</html>
